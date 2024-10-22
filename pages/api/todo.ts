@@ -87,20 +87,22 @@ export type DeleteTodoResponseType = {}
 
 
 const ajv = new Ajv()
+ajv.addKeyword("errorMessage")
 export default withApiAuthRequired(
   async (req: NextApiRequest, res: NextApiResponse) => {
     try {
       const session = await getSession(req, res)
-      const userId = session?.user.userId
+      const userId = session?.user.sub
       if(!userId) return res.status(401).end()
 
       //create Todo
       if (req.method === "POST") {
         const data = req.body as CreateTodoRequestType
+        console.log("data",data)
         const validate = ajv.compile(CREATE_TODO_REQUEST_SCHEMA)
         if(!validate(data)) {
           const firstError = validate?.errors?.[0]
-          return res.status(400).json({ error: `Validation Error: ${firstError?.instancePath.slice(1)} ${firstError?.message}` })
+          return res.status(400).json({ message: `Validation Error: ${firstError?.instancePath.slice(1)} ${firstError?.message}` })
         }
 
         const result = await getTodosCollection(await getDb()).insertOne(makeNewTodo({...data,userId}))
@@ -116,7 +118,7 @@ export default withApiAuthRequired(
         const validate = ajv.compile(UPDATE_TODO_REQUEST_SCHEMA)
         if(!validate(data)) {
           const firstError = validate?.errors?.[0]
-          return res.status(400).json({ error: `Validation Error: ${firstError?.instancePath.slice(1)} ${firstError?.message}` })
+          return res.status(400).json({ message: `Validation Error: ${firstError?.instancePath.slice(1)} ${firstError?.message}` })
         }
 
         const results = await getTodosCollection(await getDb()).findOneAndUpdate({
@@ -139,7 +141,7 @@ export default withApiAuthRequired(
         const validate = ajv.compile(GET_DELETE_TODO_REQUEST_SCHEMA)
         if(!validate(data)) {
           const firstError = validate?.errors?.[0]
-          return res.status(400).json({ error: `Validation Error: ${firstError?.instancePath.slice(1)} ${firstError?.message}` })
+          return res.status(400).json({ message: `Validation Error: ${firstError?.instancePath.slice(1)} ${firstError?.message}` })
         }
 
         const results = await getTodosCollection(await getDb()).deleteOne({
@@ -157,7 +159,7 @@ export default withApiAuthRequired(
         const validate = ajv.compile(GET_DELETE_TODO_REQUEST_SCHEMA)
         if(!validate(data)) {
           const firstError = validate?.errors?.[0]
-          return res.status(400).json({ error: `Validation Error: ${firstError?.instancePath.slice(1)} ${firstError?.message}` })
+          return res.status(400).json({ message: `Validation Error: ${firstError?.instancePath.slice(1)} ${firstError?.message}` })
         }
 
         const results = await getTodosCollection(await getDb()).findOne({
@@ -173,7 +175,8 @@ export default withApiAuthRequired(
       return res.status(404).end()
     }
     catch(error) {
-      return res.status(500).json({ error: `${error}` })
+      console.error(error)
+      return res.status(500).json({ message: `${(error as Error).message}` })
     }
   }
 )

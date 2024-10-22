@@ -16,6 +16,11 @@ import { GetTodosResponseType } from './api/todos';
 
 import styles from "./index.module.scss"
 import { CreateTodoRequestType, CreateTodoResponseType, GetDeleteTodoRequestType, UpdateTodoRequestType, UpdateTodoResponseType } from './api/todo';
+import { WithId } from 'mongodb';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faTimes } from '@fortawesome/free-solid-svg-icons';
+import { Badge } from 'react-bootstrap';
+import { useUser } from '@auth0/nextjs-auth0/client';
 
 const FETCH_OPTIONS:RequestInit = {
   mode: 'cors', // no-cors, *cors, same-origin
@@ -29,19 +34,26 @@ const FETCH_OPTIONS:RequestInit = {
 } as const
 
 export default function Home() {
-  //<data (mutation function return type), error, variables (mutation function data input), context>
-  const {data} = useQuery<GetTodosResponseType, ApiErrorType>({
-    queryKey: ["todos"],
-    queryFn: async () => {
-      const options = {
-        ...FETCH_OPTIONS,
-        method: "GET",
-      }
-      delete options.body
-      return await fetch(`todos`, options).then((res) => res.json())
-    },
-    staleTime: Infinity
-  })
+  const { user, error, isLoading } = useUser()
+  if(error) console.error(error)
+
+  const content = (() => {
+    if(isLoading) {
+      return <p>Loading...</p>
+    }
+    else if(user) {
+      return (
+        <div>
+          <DisplayTodos/>
+          <hr/>
+          <a href="/api/auth/logout"><Button>Logout</Button></a>
+        </div>
+      )
+    }
+    else {
+      return <p><a href="/api/auth/login"><Button>Login</Button></a></p>
+    }
+  })()
 
   return (
     <>
@@ -54,24 +66,44 @@ export default function Home() {
           <h1>Next.js MongoDB Auth0 Test Todo Application</h1>
           <br/>
           <br/>
-
-          <CreateTodoForm/>
-
-          <hr/>
         </Container>
       </section>
 
       <section>
         <Container>
-          {data?.map((todo, i) => <Todo key={i} todo={todo}/>)}
-          {!data && <p><b>You have no Todos!</b></p>}
+          {content}
         </Container>
       </section>
     </>
   )
 }
 
-function CreateTodoForm() {
+function DisplayTodos() {
+  //<data (mutation function return type), error, variables (mutation function data input), context>
+  const {data, refetch} = useQuery<GetTodosResponseType, ApiErrorType>({
+    queryKey: ["todos"],
+    queryFn: async () => {
+      const options = {
+        ...FETCH_OPTIONS,
+        method: "GET",
+      }
+      delete options.body
+      return await fetch(`/api/todos`, options).then(handleFetch)
+    },
+    staleTime: Infinity
+  })
+
+  return (
+    <>
+      <CreateTodoForm refetch={refetch}/>
+      <hr/>
+      {data?.map((todo, i) => <Todo key={i} refetch={refetch} todo={todo}/>)}
+      {(!data || !data.length) && <p><b>You have no Todos</b></p>}
+    </>
+  )
+}
+
+function CreateTodoForm({refetch}:{refetch:() => any}) {
   const [newTodo, setNewTodo] = useState<string>("")
 
   //<data (mutation function return type), error, variables (mutation function data input), context>
@@ -83,10 +115,14 @@ function CreateTodoForm() {
       const options = {
         ...FETCH_OPTIONS,
         method: "POST",
-        body: JSON.stringify({body})
+        body: JSON.stringify(body)
       }
-      return await fetch(`todos`, options).then((res) => res.json())
+      return await fetch(`/api/todo`, options).then(handleFetch)
     },
+    onSuccess: () => {
+      setNewTodo("")
+      refetch()
+    }
   })
 
   const handleAddNewTodo = (e:FormEvent<HTMLFormElement>) => {
@@ -95,7 +131,7 @@ function CreateTodoForm() {
   }
 
   return (
-    <Form onChange={handleAddNewTodo}>
+    <Form onSubmit={handleAddNewTodo}>
       <InputGroup className="mb-3">
         <Form.Control
           placeholder="New Todo"
@@ -117,30 +153,39 @@ function ErrorMessage({children}:{children:React.ReactNode}) {
   return <p style={{color:"red"}}>{children}</p>
 }
 
-function Todo({todo:{
-  _id,
-  createdAt,
-  done,
-  lastUpdated,
-  name,
-}}:{todo: WithId<TodoType>}) {
+function Todo({
+  refetch,
+  todo:{
+    _id,
+    createdAt,
+    done,
+    lastUpdated,
+    name,
+  }
+}:{
+  refetch: () => any,
+  todo: WithId<TodoType>
+}) {
   const [editMode, setEditMode] = useState<boolean>(false)
 
   //<data (mutation function return type), error, variables (mutation function data input), context>
   const {error:updateError, isLoading:updateIsLoading, mutate:update} = useMutation<UpdateTodoResponseType, ApiErrorType>({
     mutationFn: async () => {
       const body:UpdateTodoRequestType = {
-        _id,
+        _id: _id.toString(),
         done: !done,
         name,
       }
       const options = {
         ...FETCH_OPTIONS,
         method: "PUT",
-        body: JSON.stringify({body})
+        body: JSON.stringify(body)
       }
-      return await fetch(`todos`, options).then((res) => res.json())
+      return await fetch(`/api/todo`, options).then(handleFetch)
     },
+    onSuccess: () => {
+      refetch()
+    }
   })
 
 
@@ -148,15 +193,18 @@ function Todo({todo:{
   const {error:deleteError, isLoading:deleteIsLoading, mutate:deleteTodo} = useMutation<UpdateTodoResponseType, ApiErrorType>({
     mutationFn: async () => {
       const body:GetDeleteTodoRequestType = {
-        _id,
+        _id: _id.toString(),
       }
       const options = {
         ...FETCH_OPTIONS,
         method: "DELETE",
-        body: JSON.stringify({body})
+        body: JSON.stringify(body)
       }
-      return await fetch(`todos`, options).then((res) => res.json())
+      return await fetch(`/api/todo`, options).then(handleFetch)
     },
+    onSuccess: () => {
+      refetch()
+    }
   })
 
   return (
@@ -166,10 +214,15 @@ function Todo({todo:{
         <Col><p>{name}</p></Col>
         <Col><p>{new Date(lastUpdated).toDateString()}</p></Col>
         <Col><p>{new Date(createdAt).toDateString()}</p></Col>
-        <Col><FontAwesomeIcon icon={faTimes} onClick={() => deleteTodo()}/></Col>
+        <Col><p><FontAwesomeIcon icon={faTimes} onClick={() => deleteTodo()}/></p></Col>
       </Row>
-      {updateError && <ErrorMessage>{updateError.error}</ErrorMessage>}
-      {deleteError && <ErrorMessage>{deleteError.error}</ErrorMessage>}
+      {updateError && <ErrorMessage>{updateError.message}</ErrorMessage>}
+      {deleteError && <ErrorMessage>{deleteError.message}</ErrorMessage>}
     </div>
   )
+}
+
+async function handleFetch(res: Response) {
+  if(!res.ok) throw new Error(`${res.status} ${res.statusText} ${((await res.json() as ApiErrorType).message)}`)
+  return res.json()
 }

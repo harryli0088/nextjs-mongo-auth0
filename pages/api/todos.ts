@@ -4,15 +4,16 @@ import { withApiAuthRequired, getSession } from '@auth0/nextjs-auth0';
 import { getTodosCollection } from "lib/todo/getTodosCollection";
 import getDb from "lib/getDb";
 import { TodoType } from "types/todo";
+import { WithId } from "mongodb";
 
-export type GetTodosResponseType = TodoType[]
+export type GetTodosResponseType = WithId<TodoType>[]
 
 export default withApiAuthRequired(
   async (req: NextApiRequest, res: NextApiResponse) => {
     try {
       if (req.method === "GET") {
         const session = await getSession(req, res)
-        const userId = session?.user.userId
+        const userId = session?.user.sub
         if(!userId) return res.status(401).end()
 
         //get the Todos that belong to this user
@@ -27,7 +28,8 @@ export default withApiAuthRequired(
       return res.status(404).end()
     }
     catch(error) {
-      return res.status(500).json({ error: `${error}` })
+      console.error(error)
+      return res.status(500).json({ message: `${error}` })
     }
   }
 )
