@@ -27,6 +27,7 @@ const CREATE_TODO_REQUEST_SCHEMA: JSONSchemaType<CreateTodoRequestType> = {
   required: ["name"],
   additionalProperties: false
 }
+export type CreateTodoResponseType = any
 
 export type UpdateTodoRequestType = {
   _id: string,
@@ -61,6 +62,7 @@ const UPDATE_TODO_REQUEST_SCHEMA: JSONSchemaType<UpdateTodoRequestType> = {
   required: ["_id","done","name"],
   additionalProperties: false
 }
+export type UpdateTodoResponseType = any
 
 export type GetDeleteTodoRequestType = {
   _id: string,
@@ -81,6 +83,8 @@ const GET_DELETE_TODO_REQUEST_SCHEMA: JSONSchemaType<GetDeleteTodoRequestType> =
   required: ["_id"],
   additionalProperties: false
 }
+export type DeleteTodoResponseType = {}
+
 
 const ajv = new Ajv()
 export default withApiAuthRequired(
@@ -99,9 +103,10 @@ export default withApiAuthRequired(
           return res.status(400).json({ error: `Validation Error: ${firstError?.instancePath.slice(1)} ${firstError?.message}` })
         }
 
-        const results = await getTodosCollection(await getDb()).insertOne(makeNewTodo({...data,userId}))
-        if(results.insertedId) {
-          return res.status(200).json(results)
+        const result = await getTodosCollection(await getDb()).insertOne(makeNewTodo({...data,userId}))
+        if(result.insertedId) {
+          const response:CreateTodoResponseType = result
+          return res.status(200).json(response)
         }
         throw new Error("There was an error adding your Todo")
       }
@@ -123,7 +128,8 @@ export default withApiAuthRequired(
           }
         },{returnDocument: "after", upsert: false})
         if(results.value) {
-          return res.status(200).json(results.value)
+          const response:UpdateTodoResponseType = results.value
+          return res.status(200).json(response)
         }
         return res.status(404).end()
       }
@@ -140,7 +146,8 @@ export default withApiAuthRequired(
           _id: new ObjectId(data._id),
         })
         if(results.deletedCount > 0) {
-          return res.status(200).json({})
+          const response:DeleteTodoResponseType = {}
+          return res.status(200).json(response)
         }
         return res.status(404).end()
       }
