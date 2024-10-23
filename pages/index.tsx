@@ -14,13 +14,14 @@ import { HeadMeta } from 'components/HeadMeta';
 import { ApiErrorType, TodoType } from 'types/todo';
 import { GetTodosResponseType } from './api/todos';
 
-import styles from "./index.module.scss"
 import { CreateTodoRequestType, CreateTodoResponseType, GetDeleteTodoRequestType, UpdateTodoRequestType, UpdateTodoResponseType } from './api/todo';
 import { WithId } from 'mongodb';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTimes } from '@fortawesome/free-solid-svg-icons';
 import { Badge } from 'react-bootstrap';
 import { useUser } from '@auth0/nextjs-auth0/client';
+
+import styles from "./index.module.scss"
 
 const FETCH_OPTIONS:RequestInit = {
   mode: 'cors', // no-cors, *cors, same-origin
@@ -80,7 +81,7 @@ export default function Home() {
 
 function DisplayTodos() {
   //<data (mutation function return type), error, variables (mutation function data input), context>
-  const {data, refetch} = useQuery<GetTodosResponseType, ApiErrorType>({
+  const {data, error, isLoading, refetch} = useQuery<GetTodosResponseType, ApiErrorType>({
     queryKey: ["todos"],
     queryFn: async () => {
       const options = {
@@ -88,17 +89,50 @@ function DisplayTodos() {
         method: "GET",
       }
       delete options.body
-      return await fetch(`/api/todos`, options).then(handleFetch)
+      const response = await fetch(`/api/todos`, options).then(handleFetch) as GetTodosResponseType
+      return response.sort((a,b) => {
+        if(a.done && !b.done) {
+          return 1
+        }
+        else if(b.done && !a.done) {
+          return -1
+        }
+        return Math.sign(b.lastUpdated - a.lastUpdated)
+      })
     },
     staleTime: Infinity
   })
+
+  const content = (() => {
+    if(isLoading) {
+      return <p>Loading...</p>
+    }
+    else if(error) {
+      return <p>{error.message}</p>
+    }
+    else if(data?.length) {
+      return (
+        <>
+          <br/>
+          <Row>
+            <Col><p><b>Status</b></p></Col>
+            <Col><p><b>Todo</b></p></Col>
+            <Col><p><b>Last Updated</b></p></Col>
+            <Col><p><b>Created At</b></p></Col>
+            <Col></Col>
+          </Row>
+          {data?.map((todo, i) => <Todo key={todo._id.toString()} refetch={refetch} todo={todo}/>)}
+        </>
+      )
+    }
+    return <p><b>You have no Todos</b></p>
+  })()
 
   return (
     <>
       <CreateTodoForm refetch={refetch}/>
       <hr/>
-      {data?.map((todo, i) => <Todo key={i} refetch={refetch} todo={todo}/>)}
-      {(!data || !data.length) && <p><b>You have no Todos</b></p>}
+      {content}
     </>
   )
 }
@@ -166,8 +200,6 @@ function Todo({
   refetch: () => any,
   todo: WithId<TodoType>
 }) {
-  const [editMode, setEditMode] = useState<boolean>(false)
-
   //<data (mutation function return type), error, variables (mutation function data input), context>
   const {error:updateError, isLoading:updateIsLoading, mutate:update} = useMutation<UpdateTodoResponseType, ApiErrorType>({
     mutationFn: async () => {
@@ -210,11 +242,11 @@ function Todo({
   return (
     <div>
       <Row>
-        <Col><Badge onClick={() => update()}>{done}</Badge></Col>
+        <Col><Badge className={styles.badge} bg={done?"secondary":"warning"} onClick={() => update()}>{done ? "Done" : "Todo"}</Badge></Col>
         <Col><p>{name}</p></Col>
         <Col><p>{new Date(lastUpdated).toDateString()}</p></Col>
         <Col><p>{new Date(createdAt).toDateString()}</p></Col>
-        <Col><p><FontAwesomeIcon icon={faTimes} onClick={() => deleteTodo()}/></p></Col>
+        <Col><p><FontAwesomeIcon className={styles.icon} icon={faTimes} onClick={() => deleteTodo()}/></p></Col>
       </Row>
       {updateError && <ErrorMessage>{updateError.message}</ErrorMessage>}
       {deleteError && <ErrorMessage>{deleteError.message}</ErrorMessage>}

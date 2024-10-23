@@ -98,7 +98,6 @@ export default withApiAuthRequired(
       //create Todo
       if (req.method === "POST") {
         const data = req.body as CreateTodoRequestType
-        console.log("data",data)
         const validate = ajv.compile(CREATE_TODO_REQUEST_SCHEMA)
         if(!validate(data)) {
           const firstError = validate?.errors?.[0]
@@ -126,6 +125,7 @@ export default withApiAuthRequired(
         },{
           $set: {
             done: data.done,
+            lastUpdated: new Date().getTime(),
             name: data.name,
           }
         },{returnDocument: "after", upsert: false})
