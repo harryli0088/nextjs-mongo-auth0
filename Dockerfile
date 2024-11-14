@@ -2,14 +2,13 @@ FROM node:lts-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm
+COPY package.json package-lock.json ./
 
-RUN pnpm install
+RUN npm install
 
 COPY . .
 
-RUN pnpm build
+RUN npm build
 
 # Stage 2: Create a lightweight image to serve the app
 FROM node:lts-alpine AS runner
